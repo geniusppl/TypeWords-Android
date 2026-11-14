@@ -1,0 +1,15 @@
+{
+  "appId": "cc.typewords.offline",
+  "appName": "TypeWords",
+  "webDir": ".output/public",
+  "android": {
+    "allowMixedContent": false,
+    "captureInput": false,
+    "webContentsDebuggingEnabled": false
+  },
+  "plugins": {
+    "SystemBars": {
+      "insetsHandling": "native"
+    }
+  }
+}

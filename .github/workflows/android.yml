@@ -1,0 +1,92 @@
+name: 构建安卓离线版 APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-build
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.14.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: 下载要内置的词典（离线可用）
+        run: ./scripts/app/fetch-offline-dicts.sh
+
+      - name: 生成网页（APP 模式，纯本地运行）
+        env:
+          TW_APP: '1'
+          NODE_OPTIONS: --max-old-space-size=6144
+        run: |
+          pnpm generate
+          test -f .output/public/index.html
+
+      - name: 同步到安卓工程
+        run: npx cap sync android
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - uses: android-actions/setup-android@v3
+
+      - name: 打包签名 APK
+        env:
+          TW_VERSION_CODE: ${{ github.run_number }}
+          TW_VERSION_NAME: 1.0.${{ github.run_number }}
+        run: |
+          cd android
+          chmod +x gradlew
+          for i in 1 2 3; do ./gradlew assembleRelease --no-daemon && break; echo "retry $i"; sleep 30; done
+          ls -la app/build/outputs/apk/release/
+          mkdir -p ../dist
+          cp app/build/outputs/apk/release/app-release.apk ../dist/TypeWords-offline-1.0.${{ github.run_number }}.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TypeWords-offline-apk
+          path: dist/*.apk
+
+      - name: 写发布说明
+        run: |
+          {
+            cat .github/release-notes/next.md
+            echo
+            echo "---"
+            echo "构建自提交 ${GITHUB_SHA::7}。本项目基于 [zyronon/TypeWords](https://github.com/zyronon/TypeWords)（GPL-3.0）改编。"
+          } > "$RUNNER_TEMP/notes.md"
+
+      - name: 发布到 Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: TypeWords 安卓离线版 1.0.${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          make_latest: true
+          files: dist/*.apk
+          body_path: ${{ runner.temp }}/notes.md
