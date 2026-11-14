@@ -53,7 +53,11 @@ jobs:
           java-version: '21'
           cache: gradle
 
-      - uses: android-actions/setup-android@v3
+      - name: 准备安卓 SDK（使用 GitHub 自带的）
+        run: |
+          echo "ANDROID_HOME=${ANDROID_HOME:-/usr/local/lib/android/sdk}" >> "$GITHUB_ENV"
+          echo "sdk.dir=${ANDROID_HOME:-/usr/local/lib/android/sdk}" > android/local.properties
+          yes | "${ANDROID_HOME:-/usr/local/lib/android/sdk}"/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null || true
 
       - name: 打包签名 APK
         env:
